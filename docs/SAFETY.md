@@ -29,7 +29,7 @@
 
 - [ ] `inspect` shows model **2304**, version **0x0309**, and no marker.
 - [ ] You downloaded the original firmware yourself and the hash matches (`firmware/README.md`).
-- [ ] You have a **recovery path you understand** (vendor documentation for the bootloader / reflashing). [docs/RECOVERY.md] 
+- [ ] You have a **recovery path you understand** (vendor documentation for the bootloader / reflashing). [docs/RECOVERY.md](RECOVERY.md)
 - [ ] Only this keyboard is connected, directly to the PC (no hub), by a good cable; the PC will not sleep; a laptop is on mains power.
 - [ ] SignalRGB, the vendor driver page and `iot_driver.exe` are closed.
 - [ ] You wrote down your remaps and settings; the images do not contain a backup.
