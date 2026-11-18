@@ -1,0 +1,7 @@
+# Never commit vendor firmware, USB captures (they contain keystrokes), or local logs
+*.bin
+*.pcap
+*.pcapng
+flash-*-log.json
+__pycache__/
+*.pyc
