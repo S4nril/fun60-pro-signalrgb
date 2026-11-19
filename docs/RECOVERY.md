@@ -1,14 +1,17 @@
 # Recovery: going back to the original firmware, restoring settings, recalibrating
 
-This page joins two things: this repository's own recovery path (the flasher restoring the original image), and a summary, in our own
-words, of the recovery guide that MonsGeek publishes. Read [SAFETY.md](SAFETY.md) first.
+This page joins two things: this repository's own recovery path (the flasher restoring the original image), and a summary, in our own words, of the
+recovery guide that **MonsGeek support sent to the maintainer by email**. As far as we know that guide is not a public web page, so there is nothing to
+link to. Read [SAFETY.md](SAFETY.md) first.
 
 > **Status.** No hardware test of either recovery path is recorded in [TEST_REPORTS.md](TEST_REPORTS.md). The flasher path has been exercised only against a
 > simulated bootloader. The vendor path is summarised from the vendor's guide and was not re-verified here. Add your own results.
 
-Official sources (the vendor's pages, not mirrors):
-the driver downloads at <https://www.monsgeek.com/download/>, and the online driver at <https://app.monsgeek.com/> (Chrome only, per the vendor).
-This repository does **not** redistribute the vendor's recovery tool or firmware package; get them from the vendor's own page.
+**Where to get the vendor's material.** The recovery guide and its tool package come from MonsGeek support: write to them, say you have a FUN60 Pro (model ID 2304),
+and ask for the recovery guide and the package for your model. The guide the maintainer received includes a download link for the tool package; we did not check
+what that link serves, so use only links that support gives you directly, and look at what you downloaded before running it. The vendor's drivers are at
+<https://www.monsgeek.com/download/> and the online driver at <https://app.monsgeek.com/> (Chrome only, per the guide).
+This repository does **not** redistribute the vendor's guide, recovery tool or firmware package.
 
 ## Which path to use
 
@@ -46,7 +49,7 @@ python tools/fun60pro_flasher.py flash firmware/fw_2304.bin --arm --recover-in-b
 The vendor distributes a firmware package that contains a small Windows upgrade tool (the guide names `royuan_tool.exe` and `ry_upgrade.exe`).
 In short, as the guide describes it:
 
-1. Download the package from the vendor's own recovery page and extract **all** of its files into one folder.
+1. Get the package from MonsGeek support (the guide is sent with it or on request) and extract **all** of its files into one folder.
 2. Unplug other USB devices, connect the keyboard **directly** to the PC (no hub), and do not open the MonsGeek driver or touch the keyboard during the update.
 3. Run the tool as administrator and wait for its window.
 4. Pick your keyboard in the device list. If several devices appear, unplug and replug the keyboard: the entry that disappears and comes back is the one.
