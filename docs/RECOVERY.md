@@ -6,7 +6,7 @@ words, of the recovery guide that MonsGeek publishes. Read [SAFETY.md](SAFETY.md
 > **Status.** No hardware test of either recovery path is recorded in [TEST_REPORTS.md](TEST_REPORTS.md). The flasher path has been exercised only against a
 > simulated bootloader. The vendor path is summarised from the vendor's guide and was not re-verified here. Add your own results.
 
-Official sources (the vendor's pages, not mirrors): the vendor's recovery guide on its website [ADD LINK TO THE VENDOR'S RECOVERY PAGE],
+Official sources (the vendor's pages, not mirrors):
 the driver downloads at <https://www.monsgeek.com/download/>, and the online driver at <https://app.monsgeek.com/> (Chrome only, per the vendor).
 This repository does **not** redistribute the vendor's recovery tool or firmware package; get them from the vendor's own page.
 
