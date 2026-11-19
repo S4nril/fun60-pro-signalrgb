@@ -17,7 +17,7 @@ python tools/build_pro_patch.py selftest <ultra_stock.bin> <ultra_F6PK.bin>   # 
 | Suite | Checks |
 |---|---|
 | `test_flasher_sim.py` | planned frames (`bac05c06fc9601` ... for the original, `bac06106169801` ... for the patched image); received blocks reassemble to `image[0x5000:]`; refusals (unknown image, model 2381, wrong version, two keyboards, wrong typed phrase, bootloader without the flag, patched image in recovery); no retry and no end frame after a failed block; missing `0x55` confirmation; read-only `inspect` |
-| `test_patch_emulation.py` | identity reply (model, marker, version with `r0` preserved); with `flag = 1` registers, stack and RAM at the original handler body equal the unpatched image; with `flag = 2` and mode 13 the 378 bytes reach the RAM buffer and the original handler is skipped; with another mode nothing is copied |
+| `test_patch_emulation.py` | identity reply (model, marker, version with `r0` preserved) for v1 and v2 (v2: model bytes untouched, marker at bytes 9-12); with `flag = 1` registers, stack and RAM at the original handler body equal the unpatched image; with `flag = 2` and mode 13 the 378 bytes reach the RAM buffer and the original handler is skipped; with another mode nothing is copied |
 | `test_plugin_sim.js` | refuses on original firmware, wrong version, wrong model; mode-13 write once with a valid checksum; a frame is 7 pages with flag `2` only on the last; flag `1` never sent; restore on exit; pages byte-identical to pages captured from the vendor driver; 61 unique slots; debug slot |
 | `build_pro_patch.py selftest` | rebuilds the Ultra project's published patched image byte for byte |
 
@@ -41,3 +41,4 @@ Do these in order and stop at the first surprise. Record each result with the te
 5. Use the plugin's *Debug slot* property to walk the 61 key slots and report any key that lights the wrong LED.
 6. Check what happens with the vendor driver while the marker is present.
 7. Restore the original image and confirm `inspect` shows no marker.
+8. After every flash (not only restores) use the vendor driver's *Retrieve Current Setting* or *Reset* and recalibrate, as in [RECOVERY.md](RECOVERY.md); record whether your settings survived.

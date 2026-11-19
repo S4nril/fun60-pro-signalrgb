@@ -62,6 +62,27 @@ RAM addresses (the same in the Ultra and Pro images; semantics inferred from the
    (value 9) to store the firmware version; without this the version would read `0x034B`.
 3. Four bytes of padding instead of eight before the new code, so the new code lands at the same address (`0x1e700`).
 
+## Variant v2: keep the vendor driver working
+
+With v1 the marker overwrites identity data bytes 3-6. The vendor driver reads the model as a 32-bit value from identity bytes 1-4 (per the Ultra
+project's notes), so bytes 3-4 are part of the model ID and the driver no longer finds the keyboard in its device table. v2 changes where the
+marker goes, nothing else:
+
+| Where (Pro) | Original | v2 | Meaning |
+|---|---|---|---|
+| `0x11da0`, 4 bytes | `00 f0 cc ba` | `0c f0 2e bd` | the identity builder's final `b.w 0x1233c` becomes `b.w 0x1e800` |
+| `0x1238c`, 4 bytes | `2d e9 f0 43` | `0c f0 b8 b9` | the same hook as v1 |
+| `0x1e800`-`0x1e817`, 24 bytes | | marker routine | `push {r0}`, writes "F6PK" to `[r4+0xb .. r4+0xe]`, `pop {r0}`, `b.w 0x1233c` |
+
+The image is 124,952 bytes (v1: 124,950). The four zero stores to `[r4+5..r4+8]` stay in place, so identity bytes 1-8 are exactly the original's
+(`00 09 00 00 00 00 09 03`), and the marker sits in identity data bytes 9-12 (data index = buffer offset - 2), which are zero in the original reply.
+
+Assumptions behind v2: that the vendor driver does not choke on bytes 9-12; that the reply buffer is zeroed before the identity builder runs (the
+captured original replies are zero from byte 9 on); and that the shared epilogue at `0x1233c` leaves the buffer alone. **On hardware** the maintainer
+reports that, with v2 flashed, the vendor driver recognises the keyboard (one keyboard). The `inspect` output after flashing (whether the marker is
+visible in the reply) was not recorded. If the marker does not survive, the plugin simply refuses to stream (it never guesses).
+Checked in CPU emulation: model bytes untouched, version `0x0309`, marker at bytes 9-12, `r0 == 3` on return, and the hook behaves exactly like v1.
+
 ## How it was checked
 
 * `tools/build_pro_patch.py selftest <ultra_stock> <ultra_F6PK>` reproduces the published Ultra image byte for byte.

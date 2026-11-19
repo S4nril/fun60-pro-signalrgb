@@ -73,4 +73,21 @@ check(bytes(mu.mem_read(LED, 378)) == data and not touched_original(hits) and (m
       "flag=2 and mode 13: 378 bytes copied to the LED buffer, original handler skipped")
 mu, data = setup(IMG, 2, mode=5); hits = run_to(mu, FL + 0x1f000)
 check(bytes(mu.mem_read(LED, 378)) == b'\0' * 378 and not touched_original(hits), "flag=2 and mode != 13: nothing copied, original handler still skipped")
+
+# ---- v2 image: same hook, marker moved to identity bytes 9-12, model bytes untouched
+IMG2 = bp.build_v2(STOCK, *bp.PRESETS["pro2304-v2"])
+mu = mk(IMG2); BUF = RAM + 0x7000
+mu.reg_write(UC_ARM_REG_R4, BUF); mu.reg_write(UC_ARM_REG_R6, 0); mu.reg_write(UC_ARM_REG_R0, 0x1234); mu.reg_write(UC_ARM_REG_LR, FL + 0x1f001)
+mu.reg_write(UC_ARM_REG_SP, RAM + 0xff00); mu.mem_write(BUF, b'\xaa' * 24)
+mu.emu_start(FL + 0x11d8c | 1, FL + 0x1233c, count=400)
+b = bytes(mu.mem_read(BUF, 24))
+check(b[3:11] == bytes([0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x03]), "v2 identity: model bytes 00 09 00 00 untouched, version 0x0309")
+check(b[11:15] == b'F6PK' and b[15] == 0xaa, "v2 identity: marker at data bytes 9-12 and nothing else written")
+check(mu.reg_read(UC_ARM_REG_R0) == 3, "v2 identity: r0 is 3 on return to the epilogue, as in the original code")
+check(state(STOCK) == state(IMG2), "v2, flag=1: registers, stack and RAM at 0x12390 identical to the stock image")
+mu, data = setup(IMG2, 2); hits = run_to(mu, FL + 0x1f000)
+check(bytes(mu.mem_read(LED, 378)) == data and not touched_original(hits) and (mu.mem_read(STATUS, 1)[0] & 0x40) == 0,
+      "v2, flag=2 and mode 13: 378 bytes copied to the LED buffer, original handler skipped")
+mu, data = setup(IMG2, 2, mode=5); hits = run_to(mu, FL + 0x1f000)
+check(bytes(mu.mem_read(LED, 378)) == b'\0' * 378 and not touched_original(hits), "v2, flag=2 and mode != 13: nothing copied")
 print("\nALL EMULATION TESTS PASSED")

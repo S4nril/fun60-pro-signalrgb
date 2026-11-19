@@ -14,6 +14,16 @@ Maintained by [S4nril](https://github.com/S4nril).
 
 Not affiliated with, endorsed by, or supported by MonsGeek, Akko, Rongyuan or SignalRGB. All trademarks belong to their owners.
 
+## Known limitation: the vendor driver (v1) and the v2 variant
+
+The image validated on hardware ("v1") writes its live-mode marker into identity bytes 3-6. Bytes 3-4 belong to the 32-bit model ID that
+the vendor driver reads (per the Ultra project's notes), so **with v1 the vendor driver stops recognising the keyboard**, and settings that
+only the vendor driver can change (FN layers, actuation points) cannot be edited while v1 is installed. The same thing happened on the Ultra.
+A second build, **v2**, writes the marker after the firmware version (bytes 9-12) and leaves the model bytes alone. **The maintainer reports that
+with v2 flashed the vendor driver recognises the keyboard** (one keyboard). **v2 is the recommended build;** v1 is kept for reference and for
+anyone who wants to compare the two.
+Also close SignalRGB while you use the vendor driver: the plugin has no hand-off, so both programs would talk to the keyboard at once.
+
 ## Why a firmware patch is needed
 
 With the original firmware the only way to set per-key colors is the vendor driver's *Apply*, and that command **saves to the
@@ -25,7 +35,7 @@ patch to the Pro image and wraps it in tools that refuse to do anything unsafe t
 
 | Path | What it is |
 |---|---|
-| `tools/build_pro_patch.py` | Builds the patched image **from your own copy of the original firmware** (12 bytes changed in place + 282 appended). Self-tests against the Ultra project's published image. |
+| `tools/build_pro_patch.py` | Builds the patched image **from your own copy of the original firmware**: `pro` = v1 (12 bytes changed in place + 282 appended), `pro-v2` = v2 (marker moved, see above). Self-tests against the Ultra project's published image. |
 | `tools/fun60pro_flasher.py` | Flasher that follows the vendor driver's USB update protocol. `plan` and `inspect` never write; `flash` needs `--arm` and a typed phrase. |
 | `plugin/MonsGeek_FUN60_Pro_LiveRGB.js` | SignalRGB plugin. Refuses to stream unless the keyboard proves it runs the patched firmware. |
 | `tests/` | Simulation tests (flasher vs a fake bootloader, plugin vs a fake SignalRGB, CPU emulation of the patched image). |
@@ -42,7 +52,8 @@ check the model and version and stop if they do not match. The key map covers th
 
 1. `py -3 -m pip install hidapi`, then `py -3 tools/fun60pro_flasher.py inspect` (read-only): confirm model 2304 / version 0x0309.
 2. Download the original firmware for your own keyboard, see [firmware/README.md](firmware/README.md).
-3. `py -3 tools/build_pro_patch.py pro firmware/fw_2304.bin ID2304-V309-livepatch.bin`
+3. `py -3 tools/build_pro_patch.py pro firmware/fw_2304.bin ID2304-V309-livepatch.bin` (v1, validated on one keyboard, but the vendor driver stops recognising the keyboard), or
+   `py -3 tools/build_pro_patch.py pro-v2 firmware/fw_2304.bin ID2304-V309-livepatch-v2.bin` (v2, recommended: the vendor driver keeps working; validated on one keyboard)
 4. Read [docs/SAFETY.md](docs/SAFETY.md) and confirm you have a recovery path.
 5. `py -3 tools/fun60pro_flasher.py plan <image>`, then `flash <image>` (checks only), then `flash <image> --arm` when you decide to.
    Flashing the **original** image first, as a rehearsal, is recommended.
@@ -54,13 +65,14 @@ check the model and version and stop if they do not match. The key map covers th
 
 * Frame format, checksums and page layout match USB captures of the vendor driver, byte for byte.
 * The builder reproduces the Ultra project's published image byte for byte from the Ultra original.
-* CPU emulation: identity reply, normal reports unchanged, flag-2 frames copied to RAM only.
+* CPU emulation (v1 and v2): identity reply, normal reports unchanged, flag-2 frames copied to RAM only; v2 leaves the model bytes untouched.
 * Flasher logic against a simulated bootloader, including refusals and failures.
 * Update protocol read from the vendor driver's code; 22 of 61 key slots seen in captures, the other 39 derived by column counting.
 
 **Reported working on real hardware** (one keyboard, tested by the maintainer S4nril: FUN60 Pro, model 2304, firmware V309)
 
-* The patched firmware was accepted and runs on the keyboard.
+* The v1 patched firmware was accepted and runs on the keyboard.
+* The v2 patched firmware was flashed, everything worked as the maintainer expected, and **the vendor driver recognises the keyboard** with it.
 * Live per-key RGB from SignalRGB with the plugin.
 
 This is a sample of one. The step-by-step record (software versions, rehearsal flash, restore, key checks) is still to be written down in
@@ -68,11 +80,17 @@ This is a sample of one. The step-by-step record (software versions, rehearsal f
 
 **Not reported yet / still unverified**
 
+* v2 details not yet recorded: the `inspect` output after flashing, editing FN layers and actuation points in the vendor driver, live RGB with v2 key by key, and whether saved settings survived the flash.
 * Any other keyboard: other FUN60 Pro IDs (2305, 2463, 2464, 2505, 2600 and others), other revisions, ISO or other layouts.
 * The 39 derived key slots checked one by one, and the `Debug slot` walk-through of all 61 keys.
 * Restoring the original image on real hardware, and recovery from bootloader mode (only simulation tests exist; no hardware test of either has been reported).
 * How the vendor driver behaves while the live-mode marker is present (it stopped recognising the Ultra until patched).
 * Long-term effects: flash wear, and whether anything important lives in flash right after the end of the image.
+
+## Versions
+
+Two numbering schemes: repository releases (git tags such as `v2.0.0`) and the two firmware image variants (`v1`, `v2`). Release 2.0.0 is the
+first that can build the **v2** image. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Documentation
 
@@ -81,12 +99,13 @@ This is a sample of one. The step-by-step record (software versions, rehearsal f
 * [docs/PATCH.md](docs/PATCH.md) - exactly what the firmware patch changes and why
 * [docs/KEYMAP.md](docs/KEYMAP.md) - the 61-key slot table, verified vs derived
 * [docs/CAPTURE_GUIDE.md](docs/CAPTURE_GUIDE.md) - how to capture and read the vendor driver's USB traffic
-* [docs/SAFETY.md](docs/SAFETY.md) - risks, checklist, recovery
+* [docs/SAFETY.md](docs/SAFETY.md) - risks and checklist
+* [docs/RECOVERY.md](docs/RECOVERY.md) - restoring the original firmware, settings and calibration
 * [docs/TESTING.md](docs/TESTING.md) and [docs/TEST_REPORTS.md](docs/TEST_REPORTS.md) - tests and how to report hardware results
 
 ## Provenance
 
-The analysis and code in this repository were produced with the help of an AI assistant working from USB captures,
+The analysis and code in this repository were produced with the help of an AI assistant (Claude) working from USB captures,
 the vendor driver's published JavaScript, the firmware images, and the Ultra project's public files. Treat everything as
 unreviewed until you have read it yourself; the tests are there so you can check the claims. The maintainer then validated the
 result on one real keyboard (see the status above).

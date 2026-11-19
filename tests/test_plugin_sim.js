@@ -36,6 +36,13 @@ check(!m.sent.some(p => p[1] === 0x0c || p[1] === 0x07), 'wrong firmware version
 // wrong model
 m = makeDevice([0x8f, 0x4d, 9, 0x46, 0x36, 0x50, 0x4b, 0x02, 0x03], 5); globalThis.device = m.dev; P = load(defaults); P.Initialize();
 check(!m.sent.some(p => p[1] === 0x0c || p[1] === 0x07), 'wrong model (2381): refuses, no writes');
+// v2 image: marker in identity bytes 9..12, model bytes untouched
+const patchedId2 = [0x8f, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x03, 0x46, 0x36, 0x50, 0x4b];
+m = makeDevice(patchedId2, 5); globalThis.device = m.dev; P = load(defaults); P.Initialize();
+let b1 = m.sent.length; P.Render();
+check(m.st.mode === 13 && m.sent.slice(b1).filter(p => p[1] === 0x0c).length === 7, 'v2 identity (marker at bytes 9-12): live mode enabled, 7 pages per frame');
+m = makeDevice([0x8f, 0, 9, 0, 0, 0, 0, 0x0a, 0x03, 0x46, 0x36, 0x50, 0x4b], 5); globalThis.device = m.dev; P = load(defaults); P.Initialize();
+check(!m.sent.some(p => p[1] === 0x0c || p[1] === 0x07), 'v2 marker with the wrong version: refuses, no writes');
 // patched firmware, keyboard in another mode
 m = makeDevice(patchedId, 5); globalThis.device = m.dev; P = load({ ...defaults, shutdownMode: 'Restore previous mode' });
 P.Initialize();

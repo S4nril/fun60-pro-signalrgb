@@ -101,6 +101,22 @@ The maintainer (S4nril) reports a successful end-to-end validation on one FUN60 
 accepted and the plugin streamed per-key colors from SignalRGB. One keyboard is a small sample, and the details of exactly which steps were
 covered are to be recorded in [TEST_REPORTS.md](TEST_REPORTS.md).
 
+## 11. After validation: the vendor driver stops working (v1) and the v2 variant
+
+Right after the hardware validation the maintainer found that the vendor driver no longer sees the keyboard, so FN layers and actuation points
+cannot be edited. This is the same side effect the Ultra project reported, and it matches the design: v1 writes its marker into identity bytes 3-6,
+two of which belong to the 32-bit model ID the driver reads (a statement from the Ultra project's notes; it was not re-verified here, because the identity
+is parsed in the vendor's local service, which was only inspected statically).
+
+The firmware code that builds the reply shows a way out: for command `0x8F` it writes the model to `[r4+3]`/`[r4+4]`, four zeros to `[r4+5..8]`, the version to
+`[r4+9]`/`[r4+0xa]` and then jumps to the shared epilogue at `0x1233c`; the captured original replies are zero from identity byte 9 on. **v2** leaves all of those stores alone and
+replaces only that final jump, so a small routine can write the marker at `[r4+0xb..0xe]` (identity data bytes 9-12) before continuing. The flasher and the
+plugin accept either marker position. v2 was built with the same builder (`pro-v2`), checked in CPU emulation, and then flashed by the maintainer: it flashed fine and the vendor driver recognises the keyboard again (one keyboard).
+
+The vendor's own recovery guide adds a second reason the driver can look "broken" after a flash: firmware written outside the driver resets the keyboard's settings, and the
+driver may misread the configuration until you use *Retrieve Current Setting* or *Reset* (and recalibrate). So after any flash, do those steps before judging whether the marker
+is the cause. See [RECOVERY.md](RECOVERY.md).
+
 ## Tools used
 
 Wireshark + USBPcap, Python 3 (`hidapi`, `capstone`, `unicorn`, `Pillow` for screenshot decoding), Node.js (plugin mock),

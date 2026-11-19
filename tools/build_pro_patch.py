@@ -21,8 +21,16 @@ New code behaviour (read from the Ultra disassembly):
     page 6 / length 0x2A, check mode == 13, then copy 378 bytes to a RAM LED buffer
     and return without running the original handler.
 
+Two variants of the Pro image can be built:
+  pro     (v1) marker "F6PK" written to identity bytes 3..6. This is the build validated on one keyboard.
+          Side effect: bytes 3..4 are part of the 32-bit model ID the vendor driver reads, so the vendor
+          driver stops recognising the keyboard.
+  pro-v2  (v2) same hook, but the marker is written to identity bytes 9..12, after the version, and the
+          model bytes are left alone. Keeps the vendor driver working (validated on one keyboard).
+
 Usage:
-  python build_pro_patch.py pro  <stock_pro_image> <out.bin>
+  python build_pro_patch.py pro    <stock_pro_image> <out.bin>
+  python build_pro_patch.py pro-v2 <stock_pro_image> <out.bin>
   python build_pro_patch.py selftest <ultra_stock.bin> <ultra_F6PK.bin>
 """
 import hashlib
@@ -49,12 +57,17 @@ CODE_HEAD = bytes.fromhex(
 LITERALS = bytes.fromhex("146d00201c010020a85e0020606f0020946b0020")
 
 PRESETS = {
-    # name: (identity_site, hook_site, expected_identity_bytes, expected_hook_bytes)
+    # name: (identity_site, hook_site)
     "pro2304": (0x11D92, 0x1238C),
     "ultra2381": (0x11D8C, 0x12388),
+    # v2: (site of the identity builder's final `b.w`, hook_site)
+    "pro2304-v2": (0x11DA0, 0x1238C),
 }
+MARKER_OFFSET_V2 = 11     # buffer offset r4+11 = identity data byte 9 (data index = buffer offset - 2)
 EXPECT_ID = bytes.fromhex("6671a671e6712672")  # strb r6,[r4,#5],#6,#7,#8
 EXPECT_HOOK = bytes.fromhex("2de9f043")         # push.w {r4-r9,lr}
+EXPECT_TAIL_V2 = bytes.fromhex("00f0ccba")      # b.w 0x1233c : end of the identity builder (Pro, at 0x11DA0)
+TAIL_TARGET_V2 = 0x1233C
 PRO_STOCK_SHA256 = "237bbe74f2f718a08bf2b8bb9caf6ca026b86817b6baae6130e0a7794d72a6ac"
 
 
@@ -90,6 +103,55 @@ def marker_routine(marker, preserve_r0):
         out += struct.pack("<H", 0xBC01)                                  # pop {r0}
     out += b"\x70\x47"                                                    # bx lr
     return out
+
+
+def _decode_branch(src, raw):
+    """Decode a Thumb-2 B.W / BL at `src` and return its target address."""
+    hw1, hw2 = struct.unpack("<HH", raw)
+    assert hw1 & 0xF800 == 0xF000 and hw2 & 0x8000 == 0x8000, "not a 32-bit branch"
+    s = (hw1 >> 10) & 1
+    j1 = (hw2 >> 13) & 1
+    j2 = (hw2 >> 11) & 1
+    i1 = (~(j1 ^ s)) & 1
+    i2 = (~(j2 ^ s)) & 1
+    off = (s << 24) | (i1 << 23) | (i2 << 22) | ((hw1 & 0x3FF) << 12) | ((hw2 & 0x7FF) << 1)
+    if s:
+        off -= 1 << 25
+    return src + 4 + off
+
+
+def marker_routine_v2(marker, offset, ret_dst):
+    """v2 marker routine: write the marker at r4+offset.. (r4 = identity reply buffer) and continue
+    to the original epilogue. r0 is saved and restored. Ends with a B.W instead of BX LR because it is
+    entered by a tail jump that replaced the identity builder's own final B.W."""
+    assert len(marker) == 4 and 5 <= offset <= 27
+    out = struct.pack("<H", 0xB401)                                       # push {r0}
+    for k, c in enumerate(marker):
+        out += struct.pack("<H", 0x2000 | c)                              # movs r0, #c
+        out += struct.pack("<H", 0x7000 | ((offset + k) << 6) | (4 << 3) | 0)  # strb r0,[r4,#offset+k]
+    out += struct.pack("<H", 0xBC01)                                      # pop {r0}
+    out += _thumb_branch(MARKER_ADDR + len(out), ret_dst, link=False)     # b.w <original epilogue>
+    return out
+
+
+def build_v2(stock, tail_site, hook_site, marker=MARKER):
+    """Variant that leaves the model bytes alone: the identity builder's final `b.w 0x1233c` becomes
+    a jump to a routine that writes the marker at identity data bytes 9..12 and then jumps to 0x1233c."""
+    assert stock[tail_site:tail_site + 4] == EXPECT_TAIL_V2, "identity tail site mismatch"
+    assert _decode_branch(tail_site, stock[tail_site:tail_site + 4]) == TAIL_TARGET_V2
+    assert stock[hook_site:hook_site + 4] == EXPECT_HOOK, "hook site mismatch"
+    assert len(stock) <= CODE_BASE, "stock image too long for this layout"
+    out = bytearray(stock)
+    out[hook_site:hook_site + 4] = _thumb_branch(hook_site, CODE_BASE, link=False)
+    out[tail_site:tail_site + 4] = _thumb_branch(tail_site, MARKER_ADDR, link=False)
+    out += b"\xff" * (CODE_BASE - len(stock))
+    code = bytearray(CODE_HEAD)
+    code += _thumb_branch(CODE_BASE + len(code), hook_site + 4, link=False)
+    code += LITERALS
+    out += code
+    out += b"\xff" * (MARKER_ADDR - (CODE_BASE + len(code)))
+    out += marker_routine_v2(marker, MARKER_OFFSET_V2, TAIL_TARGET_V2)
+    return bytes(out)
 
 
 def build(stock, identity_site, hook_site, marker=MARKER, preserve_r0=True):
@@ -135,6 +197,13 @@ def main():
         open(sys.argv[3], "wb").write(patched)
         print("stock  sha256:", hashlib.sha256(stock).hexdigest(), len(stock))
         print("patched sha256:", hashlib.sha256(patched).hexdigest(), len(patched))
+    elif len(sys.argv) == 4 and sys.argv[1] == "pro-v2":
+        stock = load_stock(sys.argv[2])
+        site_tail, site_hook = PRESETS["pro2304-v2"]
+        patched = build_v2(stock, site_tail, site_hook)
+        open(sys.argv[3], "wb").write(patched)
+        print("stock  sha256:", hashlib.sha256(stock).hexdigest(), len(stock))
+        print("patched (v2) sha256:", hashlib.sha256(patched).hexdigest(), len(patched))
     elif len(sys.argv) == 4 and sys.argv[1] == "selftest":
         ultra_stock = open(sys.argv[2], "rb").read()
         ultra_f6pk = open(sys.argv[3], "rb").read()

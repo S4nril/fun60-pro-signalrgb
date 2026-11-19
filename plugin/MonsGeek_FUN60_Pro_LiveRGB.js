@@ -7,7 +7,7 @@
  * This plugin only streams colors when the keyboard reports ALL of:
  *   - model ID 2304 (0x0900)
  *   - firmware version 0x0309
- *   - the live-mode marker "F6PK" in the identity reply
+ *   - the live-mode marker "F6PK" in the identity reply (bytes 3-6 for the v1 image, bytes 9-12 for v2)
  * With the original firmware none of these live-mode conditions are met, so the plugin
  * refuses to stream and sends the keyboard nothing but read requests (identity 0x8F and
  * LED settings 0x87). It NEVER sends a color page with apply flag 1 (the flag the vendor
@@ -137,13 +137,12 @@ function checkIdentity(d) {
 	if (!d) { return "no reply to the identity request"; }
 	const model = d[1] | (d[2] << 8);
 	const version = d[7] | (d[8] << 8);
-	const marker = d.slice(3, 7);
 	if (model !== MODEL_ID) { return "model ID is " + model + ", expected " + MODEL_ID; }
 	if (version !== FW_VERSION) { return "firmware version is 0x" + version.toString(16) + ", expected 0x309"; }
-	for (let i = 0; i < 4; i++) {
-		if (marker[i] !== MARKER[i]) { return "live-mode marker not present (original firmware)"; }
-	}
-	return null; // verified
+	// v1 image: marker in identity bytes 3..6; v2 image: marker in bytes 9..12 (model bytes untouched)
+	const hasMarker = (off) => MARKER.every((b, i) => d[off + i] === b);
+	if (hasMarker(3) || hasMarker(9)) { return null; } // verified
+	return "live-mode marker not present (original firmware)";
 }
 
 function setLedParams(mode, speedRaw, brightness, option, r, g, b) {

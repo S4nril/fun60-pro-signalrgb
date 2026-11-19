@@ -1,155 +1,85 @@
-# MonsGeek Keyboard - Firmware Recovery Guide
+# Recovery: going back to the original firmware, restoring settings, recalibrating
 
-## 1. Overview
+This page joins two things: this repository's own recovery path (the flasher restoring the original image), and a summary, in our own
+words, of the recovery guide that MonsGeek publishes. Read [SAFETY.md](SAFETY.md) first.
 
-This guide describes how to manually flash the firmware of a MonsGeek keyboard, restore its settings, and perform keyboard calibration.
+> **Status.** No hardware test of either recovery path is recorded in [TEST_REPORTS.md](TEST_REPORTS.md). The flasher path has been exercised only against a
+> simulated bootloader. The vendor path is summarised from the vendor's guide and was not re-verified here. Add your own results.
 
-**Warning:** Make sure you are using the correct firmware for your specific keyboard model. Installing incompatible firmware may permanently damage the keyboard (brick the device) and void its warranty.
+Official sources (the vendor's pages, not mirrors): the vendor's recovery guide on its website [ADD LINK TO THE VENDOR'S RECOVERY PAGE],
+the driver downloads at <https://www.monsgeek.com/download/>, and the online driver at <https://app.monsgeek.com/> (Chrome only, per the vendor).
+This repository does **not** redistribute the vendor's recovery tool or firmware package; get them from the vendor's own page.
 
----
+## Which path to use
 
-## 2. Requirements and Precautions
+| Situation | Path |
+|---|---|
+| The keyboard still works and `inspect` shows model 2304 / version 0x0309 | **A.** this repository's flasher, original image |
+| The keyboard shows up as `3151:502A` (bootloader) and does not start | **A.** with `--recover-in-bootloader`, or **B.** |
+| The flasher cannot do it, or you prefer the vendor's tool | **B.** the vendor's manual tool |
+| The keyboard no longer shows up as a USB device at all | Neither path is known to work. Contact the vendor's support. |
 
-Before starting the firmware recovery process, follow these precautions:
+Never flash a firmware that is not for **your exact model**. Both paths below must use the original image for model 2304 (V309).
 
-- Disconnect other USB devices that could be mistaken for the keyboard.
-- Connect the keyboard directly to the computer's USB port.
-- Do not use USB hubs during the firmware update.
-- Do not disconnect the keyboard while the firmware is being flashed.
-- Do not open the MonsGeek driver or operate the keyboard during the update.
-- Make sure the firmware is specifically intended for your keyboard model.
+## A. Restore with this repository's flasher
 
-**Identifying the correct device:**
+1. Put your own `fw_2304.bin` (the original, see [../firmware/README.md](../firmware/README.md)) in `firmware/`.
+2. Follow the precautions below, then:
 
-If multiple devices appear in the firmware upgrade tool, unplug and reconnect the keyboard. Identify the entry that disappears and reappears.
+```
+python tools/fun60pro_flasher.py plan  firmware/fw_2304.bin
+python tools/fun60pro_flasher.py flash firmware/fw_2304.bin            # checks only
+python tools/fun60pro_flasher.py flash firmware/fw_2304.bin --arm      # type FLASH 2304 when asked
+```
 
----
+3. If the keyboard is already in bootloader mode (`3151:502A`) the model cannot be verified, so the flasher accepts only the original image and asks for an
+   explicit flag and phrase:
 
-## 3. Required Files
+```
+python tools/fun60pro_flasher.py flash firmware/fw_2304.bin --arm --recover-in-bootloader     # type RECOVER 2304 when asked
+```
 
-Download the firmware package from the following link:
+4. After it finishes, `inspect` should show model 2304, version 0x0309 and no marker. Then continue with "After any flash" below.
 
-**Firmware Download:**  
-https://mega.nz/file/Rq1gRLYZ#ynFtB8uXk4msA1AULmWtS7SoCiytowQLuLqkVXe4xlE
+## B. Restore with the vendor's manual tool (summary of the vendor's guide)
 
-Download all files included in the package and extract them into the same folder.
+The vendor distributes a firmware package that contains a small Windows upgrade tool (the guide names `royuan_tool.exe` and `ry_upgrade.exe`).
+In short, as the guide describes it:
 
-The package should contain one of the following firmware upgrade executables:
+1. Download the package from the vendor's own recovery page and extract **all** of its files into one folder.
+2. Unplug other USB devices, connect the keyboard **directly** to the PC (no hub), and do not open the MonsGeek driver or touch the keyboard during the update.
+3. Run the tool as administrator and wait for its window.
+4. Pick your keyboard in the device list. If several devices appear, unplug and replug the keyboard: the entry that disappears and comes back is the one.
+5. Press the tool's upgrade button and wait until it reports that it is done. Do not close the tool or unplug anything meanwhile.
+6. If it fails, the vendor suggests rebooting the PC, replugging the keyboard, and running the tool as administrator again. One deliberate retry like that is reasonable;
+   do not loop, and do not try other firmware.
 
-- `royuan_tool.exe`
-- `ry_upgrade.exe`
+Make sure the package is meant for your model. We have not checked which package the vendor ships for model 2304; if it is unclear, ask the vendor.
 
----
+## Precautions (both paths)
 
-## 4. Manual Firmware Flashing
+* Only the keyboard being recovered is connected, directly to a PC port, with a good cable. No hub. A laptop is on mains power and will not sleep.
+* SignalRGB, the vendor driver page and `iot_driver.exe` are closed.
+* Nothing is typed on the keyboard and nothing is unplugged while the update runs.
+* The firmware is for your exact model and version.
 
-Follow these steps carefully:
+## After any flash (including this repository's images)
 
-1. Extract all downloaded files into the same folder.
-2. Disconnect unnecessary USB devices.
-3. Connect the keyboard directly to the computer.
-4. Locate `royuan_tool.exe` or `ry_upgrade.exe`.
-5. Right-click the executable and select **Run as administrator**.
-6. Wait for the firmware upgrade tool to open.
-7. Identify the correct keyboard in the device list.
-8. Click the **Upgrade** button to begin flashing.
-9. Wait for the process to finish.
+Flashing outside the vendor driver **resets the keyboard's settings**, according to the vendor's guide, and the driver may then misread the
+current configuration. Expect to redo these steps after every flash, even a successful one:
 
-**Important:** Do not disconnect the keyboard, close the upgrade tool, or interrupt the process while the firmware is being installed.
+1. Open the vendor driver (desktop, or the online one in Chrome) with SignalRGB closed.
+2. Use the driver's **Retrieve Current Setting** (read what the keyboard has) or **Reset** (write a clean configuration) so that the driver and the keyboard agree.
+3. **Recalibrate** (magnetic keyboards need it after a recovery): in the driver open *Configuration*, then *Calibration*, read the instructions and start it.
+   Press every key all the way down with roughly the same force, hold each at the bottom for about 4-5 seconds, and make sure every key is both pressed and
+   released. Finish with the *Calibration is completed* button. If some keys misbehave afterwards, repeat it, making sure each key bottoms out and is released.
+4. Re-enter your remaps, FN layers and actuation points. Write them down **before** flashing; none of the images here carry a backup of them.
 
-### If the Update Fails
+## Final checklist
 
-If the firmware update fails:
-
-1. Reboot the computer.
-2. Disconnect and reconnect the keyboard.
-3. Open the firmware upgrade tool again as administrator.
-4. Repeat the update procedure.
-
----
-
-## 5. Driver Installation and Settings Recovery
-
-After flashing the firmware, the keyboard settings will be reset.
-
-The MonsGeek driver may also fail to correctly read the keyboard's current settings after installing firmware through the non-driver method.
-
-To restore proper communication between the keyboard and its driver, use one of the following options:
-
-- **Retrieve Current Setting:** Retrieves the keyboard's current configuration.
-- **Reset:** Resets the configuration through the driver.
-
-### Download the Latest Driver
-
-Official MonsGeek Driver Page:  
-https://www.monsgeek.com/download/
-
-Alternatively, use the online driver:
-
-https://app.monsgeek.com/
-
-**Note:** The online driver supports Google Chrome only.
-
----
-
-## 6. Keyboard Calibration
-
-Calibration is essential after firmware recovery to ensure that all keys register correctly.
-
-### Calibration Procedure
-
-1. Open the latest MonsGeek driver.
-2. Navigate to the **Configuration** page.
-3. Locate and click the **Calibration** button.
-4. Read the calibration instructions.
-5. Click **Start Calibration**.
-
-### Performing the Calibration
-
-During calibration:
-
-- Press every key all the way down.
-- Apply approximately the same amount of force to each key.
-- Hold each key at its lowest point for approximately 4–5 seconds.
-- Make sure every key is both pressed and released during the process.
-
-After completing the calibration, click:
-
-**Calibration is completed**
-
-### Calibration Troubleshooting
-
-If any keys fail to function correctly after calibration:
-
-1. Repeat the calibration procedure.
-2. Make sure every key reaches its lowest point.
-3. Maintain consistent pressure.
-4. Ensure that every key is pressed and released.
-
-Incomplete key presses during calibration may result in incorrect key behavior.
-
----
-
-## 7. Final Verification Checklist
-
-After completing the recovery process, verify the following:
-
-- [ ] Firmware update completed successfully.
-- [ ] Keyboard is detected by the MonsGeek driver.
-- [ ] Current settings have been retrieved or reset.
-- [ ] Keyboard calibration completed successfully.
-- [ ] All keys register correctly.
-- [ ] No unexpected key behavior is present.
-- [ ] Keyboard functions normally after reconnecting.
-
----
-
-## 8. Important Notes
-
-- Always verify firmware compatibility before flashing.
-- Never interrupt the firmware installation.
-- Always connect the keyboard directly to the computer.
-- Perform calibration after firmware recovery.
-- Recheck keyboard functionality before restoring custom configurations.
-
-**Disclaimer:** This procedure is based on the firmware recovery instructions provided by MonsGeek. Firmware compatibility and successful recovery depend on the exact keyboard model and firmware version.
+- [ ] The update finished without errors.
+- [ ] `inspect` shows model 2304, version 0x0309 and the marker you expect (none after restoring the original).
+- [ ] The vendor driver detects the keyboard and has retrieved or reset the settings.
+- [ ] Calibration is done and every key registers.
+- [ ] Nothing odd after unplugging and replugging the keyboard.
+- [ ] Your own settings are restored, and only then SignalRGB is started again.

@@ -4,10 +4,13 @@ FUN60 Pro (device ID 2304) firmware flasher - EXPERIMENTAL. Validated on real ha
 on one keyboard (model 2304, V309); not tested on anything else.
 
 It re-implements the USB update protocol that the MonsGeek web driver uses for this keyboard
-family (read from the driver's code), and it only accepts three exact files:
+family (read from the driver's code), and it only accepts exact files:
 
   * the original ID2304 V309 image (as downloaded from the vendor server, or inflated),
-  * the experimental live-RGB image built by build_pro_patch.py.
+  * the experimental live-RGB image v1 built by `build_pro_patch.py pro` (marker at identity bytes 3-6;
+    validated on one keyboard; the vendor driver stops recognising the keyboard),
+  * the experimental live-RGB image v2 built by `build_pro_patch.py pro-v2` (marker at identity bytes 9-12,
+    model bytes untouched; keeps the vendor driver working; validated on one keyboard).
 
 Commands
   plan   <image>                 offline: validates the file and prints the frames. Touches no USB.
@@ -50,7 +53,9 @@ MARKER = b"F6PK"
 KNOWN_IMAGES = {
     "237bbe74f2f718a08bf2b8bb9caf6ca026b86817b6baae6130e0a7794d72a6ac": "stock",
     "5934caf51604877baa53c3ddf0b81b8506d8af6a1a73c5f969c020a663f8eb03": "patched",
+    "f3949cbcd3fe49095c629d6f1e5ffef14d0f6d6fad3fbb34f084f7f8f0653608": "patched2",
 }
+ZERO4 = b"\x00\x00\x00\x00"
 
 LOG = []
 
@@ -160,8 +165,9 @@ def parse_identity(d):
         return None
     return {
         "model": d[1] | (d[2] << 8),
-        "marker": bytes(d[3:7]),
+        "marker": bytes(d[3:7]),                          # v1 marker position
         "version": d[7] | (d[8] << 8),
+        "marker9": bytes(d[9:13]) if len(d) >= 13 else ZERO4,  # v2 marker position
     }
 
 
@@ -186,9 +192,21 @@ def open_dev(hid, info):
 def describe(ident):
     if not ident:
         return "no valid reply"
-    kind = "marker " + ident["marker"].decode("ascii", "replace") if ident["marker"] == MARKER else (
-        "original (no marker)" if ident["marker"] == b"\x00\x00\x00\x00" else "unknown marker " + ident["marker"].hex())
+    m3, m9 = ident["marker"], ident["marker9"]
+    if m3 == MARKER and m9 == ZERO4:
+        kind = "marker F6PK at bytes 3-6 (v1 image)"
+    elif m3 == ZERO4 and m9 == MARKER:
+        kind = "marker F6PK at bytes 9-12 (v2 image)"
+    elif m3 == ZERO4 and m9 == ZERO4:
+        kind = "original (no marker)"
+    else:
+        kind = "unknown marker %s / %s" % (m3.hex(), m9.hex())
     return "model %d, version 0x%04x, %s" % (ident["model"], ident["version"], kind)
+
+
+def expected_markers(kind):
+    """(identity bytes 3-6, identity bytes 9-12) the keyboard should report after flashing `kind`."""
+    return {"stock": (ZERO4, ZERO4), "patched": (MARKER, ZERO4), "patched2": (ZERO4, MARKER)}[kind]
 
 
 # ------------------------------------------------------------------ commands
@@ -347,9 +365,8 @@ def cmd_flash(args):
         dev.close()
     print("after flashing:", describe(ident))
     if ident and ident["model"] == MODEL_ID:
-        want_marker = MARKER if kind == "patched" else b"\x00\x00\x00\x00"
-        print("identity matches the flashed image." if ident["marker"] == want_marker else
-              "WARNING: the marker does not match the flashed image.")
+        print("identity matches the flashed image." if (ident["marker"], ident["marker9"]) == expected_markers(kind) else
+              "WARNING: the identity does not match the flashed image.")
 
 
 def main():

@@ -27,11 +27,12 @@ Request `8F 00 00 00 00 00 00 70`. Reply bytes (index 0 is the echoed command):
 | Index | Meaning | Original firmware | Patched firmware |
 |---|---|---|---|
 | 1-2 | model ID, little endian | `00 09` (2304) | `00 09` |
-| 3-6 | zero on the original | `00 00 00 00` | marker `46 36 50 4B` ("F6PK") |
+| 3-6 | zero on the original | `00 00 00 00` | v1: marker `46 36 50 4B` ("F6PK"); v2: `00 00 00 00` |
 | 7-8 | firmware version, little endian | `09 03` (0x0309, "V309") | `09 03` |
+| 9-12 | zero on the original | `00 00 00 00` | v1: zero; v2: marker `46 36 50 4B` ("F6PK") |
 
 The vendor driver reads the model as a 32-bit value from indices 1-4 (per the Ultra project's notes), which is why a marker in
-indices 3-6 confuses it. The firmware server names versions like `V309`, parsed as hexadecimal.
+indices 3-6 confuses it (v1). The v2 image keeps indices 1-8 identical to the original and puts the marker in 9-12. The firmware server names versions like `V309`, parsed as hexadecimal.
 
 ## LED settings (`0x87` read, `0x07` write)
 

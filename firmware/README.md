@@ -9,7 +9,8 @@ image (it is a modified copy of the vendor's code). You build the patched image 
 |---|---|---|
 | original ID2304 V309 (inflated) | `237bbe74f2f718a08bf2b8bb9caf6ca026b86817b6baae6130e0a7794d72a6ac` | 124,668 bytes |
 | the same, as served by the vendor (raw deflate) | `a0c12398adab58289e126113302b2758a105093643908d6902f5db49be934804` | 49,431 bytes |
-| patched (built by `tools/build_pro_patch.py`) | `5934caf51604877baa53c3ddf0b81b8506d8af6a1a73c5f969c020a663f8eb03` | 124,950 bytes |
+| patched v1 (`build_pro_patch.py pro`) | `5934caf51604877baa53c3ddf0b81b8506d8af6a1a73c5f969c020a663f8eb03` | 124,950 bytes |
+| patched v2 (`build_pro_patch.py pro-v2`) | `f3949cbcd3fe49095c629d6f1e5ffef14d0f6d6fad3fbb34f084f7f8f0653608` | 124,952 bytes |
 
 If the vendor publishes a newer version the hash will differ and the tools will refuse it. That is intended: the patch offsets were
 only analysed for V309.
@@ -30,8 +31,9 @@ returns something else (another version, a ZIP), stop: this project does not sup
 ## Build the patched image
 
 ```
-python tools/build_pro_patch.py pro firmware/fw_2304.bin ID2304-V309-livepatch.bin
-python tools/fun60pro_flasher.py plan ID2304-V309-livepatch.bin
+python tools/build_pro_patch.py pro    firmware/fw_2304.bin ID2304-V309-livepatch.bin      # v1
+python tools/build_pro_patch.py pro-v2 firmware/fw_2304.bin ID2304-V309-livepatch-v2.bin   # v2 (recommended: vendor driver keeps working; validated on one keyboard)
+python tools/fun60pro_flasher.py plan ID2304-V309-livepatch-v2.bin
 ```
 
 `*.bin` is in `.gitignore`; do not commit firmware.

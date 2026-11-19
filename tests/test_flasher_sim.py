@@ -12,26 +12,29 @@ fl = load_module("fl", "tools/fun60pro_flasher.py")
 bp = load_module("bp", "tools/build_pro_patch.py")
 fl.sleep = lambda s: None
 PATCHED = bp.build(STOCK, *bp.PRESETS["pro2304"])
+PATCHED2 = bp.build_v2(STOCK, *bp.PRESETS["pro2304-v2"])
 import hashlib, tempfile
-check(hashlib.sha256(PATCHED).hexdigest() in fl.KNOWN_IMAGES, "builder output is one of the images the flasher accepts")
+check(hashlib.sha256(PATCHED).hexdigest() in fl.KNOWN_IMAGES and hashlib.sha256(PATCHED2).hexdigest() in fl.KNOWN_IMAGES,
+      "both builder outputs (v1 and v2) are images the flasher accepts")
 tmp = tempfile.mkdtemp()
 open(os.path.join(tmp, "stock.bin"), "wb").write(STOCK)
 open(os.path.join(tmp, "patched.bin"), "wb").write(PATCHED)
+open(os.path.join(tmp, "patched2.bin"), "wb").write(PATCHED2)
 bad = bytearray(STOCK); bad[0x10000] ^= 1
 open(os.path.join(tmp, "bad.bin"), "wb").write(bad)
 P = lambda n: os.path.join(tmp, n)
 
 
 class Sim:
-    def __init__(s, mode='normal', model=2304, version=0x0309, marker=b'\0\0\0\0', normal_count=1,
+    def __init__(s, mode='normal', model=2304, version=0x0309, marker=b'\0\0\0\0', marker9=b'\0\0\0\0', normal_count=1,
                  fail_chunk=None, end_status=0x55, start_silent=False):
-        s.mode = mode; s.model = model; s.version = version; s.marker = marker; s.normal_count = normal_count
+        s.mode = mode; s.model = model; s.version = version; s.marker = marker; s.marker9 = marker9; s.normal_count = normal_count
         s.fail_chunk = fail_chunk; s.end_status = end_status; s.start_silent = start_silent
         s.sent = []; s.reply = []; s.entered = False; s.started = False; s.expected = 0
         s.chunks = []; s.end = None; s.start = None; s.flashed = None
 
     def identity(s):
-        d = [0x8F, s.model & 255, s.model >> 8] + list(s.marker) + [s.version & 255, s.version >> 8]
+        d = [0x8F, s.model & 255, s.model >> 8] + list(s.marker) + [s.version & 255, s.version >> 8] + list(s.marker9)
         return d + [0] * (64 - len(d))
 
 
@@ -64,6 +67,7 @@ class FakeDev:
                     length = struct.unpack('<I', pl[8:12])[0]
                     sim.flashed = b''.join(sim.chunks)[:length]
                     sim.marker = fl.MARKER if sim.flashed == PATCHED[fl.APP_OFFSET:] else b'\0\0\0\0'
+                    sim.marker9 = fl.MARKER if sim.flashed == PATCHED2[fl.APP_OFFSET:] else b'\0\0\0\0'
                     sim.mode = 'normal'; sim.started = False
         return len(data)
 
@@ -143,4 +147,18 @@ s = Sim(mode='boot'); r, out = run(fa("stock.bin", rec=True), s, "RECOVER 2304")
 check(r == "OK" and s.flashed == STOCK[fl.APP_OFFSET:] and not s.entered, "recovery flash of stock from bootloader mode")
 s = Sim(); r, out = run(dict(fn=fl.cmd_inspect), s)
 check(r == "OK" and all(p[0] in (0x8F, 0x87) for m, p in s.sent) and "model 2304" in out, "inspect sends only 0x8F / 0x87 reads")
+# ---- v2 image (marker at identity bytes 9-12, model bytes untouched)
+_, n2, _, st2, en2 = fl.build_frames(PATCHED2)
+r, out = run(dict(image=P("patched2.bin"), fn=fl.cmd_plan), Sim())
+check(st2.hex() in out and en2.hex() in out and "image kind     : patched2" in out, "plan(patched2) prints its own start/end frames")
+s = Sim(); r, out = run(fa("patched2.bin"), s, "FLASH 2304")
+check(r == "OK" and s.flashed == PATCHED2[fl.APP_OFFSET:] and len(s.chunks) == n2, "flash(patched2) completes and the blocks reassemble exactly")
+check("marker F6PK at bytes 9-12 (v2 image)" in out and "identity matches the flashed image" in out, "post-flash identity shows the v2 marker and the model bytes intact")
+check(s.model == 2304 and s.marker == b'\0\0\0\0', "v2 leaves identity bytes 3-6 (model upper bytes) at zero")
+s = Sim(marker=fl.MARKER); r, out = run(fa("patched2.bin"), s, "FLASH 2304")
+check(r == "OK" and s.flashed == PATCHED2[fl.APP_OFFSET:] and "bytes 9-12" in out, "v2 flashes over a keyboard that runs the v1 image")
+s = Sim(marker9=fl.MARKER); r, out = run(fa("stock.bin"), s, "FLASH 2304")
+check(r == "OK" and "original (no marker)" in out, "restore stock over the v2 image")
+s = Sim(mode='boot'); r, out = run(fa("patched2.bin", rec=True), s, "RECOVER 2304")
+check(r.startswith("ABORT") and not s.sent, "v2 image refused in recovery mode (stock only)")
 print("\nALL FLASHER SIMULATION TESTS PASSED")
