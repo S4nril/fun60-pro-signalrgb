@@ -113,7 +113,7 @@ The firmware code that builds the reply shows a way out: for command `0x8F` it w
 replaces only that final jump, so a small routine can write the marker at `[r4+0xb..0xe]` (identity data bytes 9-12) before continuing. The flasher and the
 plugin accept either marker position. v2 was built with the same builder (`pro-v2`), checked in CPU emulation, and then flashed by the maintainer: it flashed fine and the vendor driver recognises the keyboard again (one keyboard).
 
-The vendor's own recovery guide adds a second reason the driver can look "broken" after a flash: firmware written outside the driver resets the keyboard's settings, and the
+The recovery guide that MonsGeek support sent to the maintainer adds a second reason the driver can look "broken" after a flash: firmware written outside the driver resets the keyboard's settings, and the
 driver may misread the configuration until you use *Retrieve Current Setting* or *Reset* (and recalibrate). So after any flash, do those steps before judging whether the marker
 is the cause. See [RECOVERY.md](RECOVERY.md).
 
